@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>URL Registry</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --ink:#15171B;
+    --surface:#1C1F24;
+    --surface2:#23272D;
+    --surface3:#2A2F36;
+    --line:#2E333A;
+    --paper:#EDEAE3;
+    --mute:#8D9199;
+    --mute-dim:#5D6169;
+    --live:#5FA98A;
+    --redirected:#6C8FC7;
+    --parked:#C9A15A;
+    --error:#C56B5E;
+    --keep:#5FA98A;
+    --cancel:#C56B5E;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--ink);
+    color:var(--paper);
+    font-family:'Space Grotesk',sans-serif;
+    min-height:100vh;
+    line-height:1.4;
+  }
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  ::selection{background:var(--live);color:var(--ink);}
+
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 80px;}
+
+  /* ---------- Header ---------- */
+  header.top{
+    display:flex;justify-content:space-between;align-items:flex-end;
+    gap:20px;margin-bottom:22px;flex-wrap:wrap;
+  }
+  h1{
+    font-size:26px;font-weight:700;margin:0;letter-spacing:-0.01em;
+  }
+  h1 span{color:var(--mute);font-weight:500;}
+  .add-btn{
+    background:var(--live);color:#0F1613;border:none;
+    padding:11px 18px;border-radius:7px;font-family:'Space Grotesk',sans-serif;
+    font-weight:600;font-size:14px;cursor:pointer;transition:transform .12s ease, background .15s ease;
+  }
+  .add-btn:hover{background:#6fbb99;transform:translateY(-1px);}
+  .add-btn:active{transform:translateY(0);}
+
+  /* ---------- Stats ---------- */
+  .stats{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:10px;
+    overflow:hidden;margin-bottom:22px;
+  }
+  .stat{background:var(--surface);padding:16px 18px;}
+  .stat .num{font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:600;}
+  .stat .lbl{font-size:12.5px;color:var(--mute);margin-top:3px;}
+  .stat.warn .num{color:var(--parked);}
+
+  /* ---------- Controls ---------- */
+  .controls{
+    display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center;
+  }
+  input[type="text"], select, input[type="number"], input[type="date"], input[type="email"], textarea{
+    background:var(--surface2);border:1px solid var(--line);color:var(--paper);
+    border-radius:7px;padding:9px 11px;font-family:'Space Grotesk',sans-serif;font-size:13.5px;
+    outline:none;
+  }
+  input[type="text"]:focus, select:focus, input[type="number"]:focus, input[type="date"]:focus, input[type="email"]:focus, textarea:focus{
+    border-color:var(--mute-dim);
+  }
+  .search{flex:1;min-width:180px;}
+  .ctrl-right{margin-left:auto;display:flex;gap:8px;}
+  .ghost-btn{
+    background:transparent;border:1px solid var(--line);color:var(--mute);
+    padding:8px 12px;border-radius:7px;font-family:'Space Grotesk',sans-serif;
+    font-size:13px;cursor:pointer;transition:all .15s ease;
+  }
+  .ghost-btn:hover{border-color:var(--mute-dim);color:var(--paper);}
+
+  /* ---------- Table ---------- */
+  .registry{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface);}
+  .row-head, .entry-row{
+    display:grid;
+    grid-template-columns: 2.1fr 1.1fr 1.1fr 0.9fr 1fr 0.8fr 32px;
+    gap:12px;align-items:center;padding:12px 16px;
+  }
+  .row-head{
+    font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--mute-dim);
+    border-bottom:1px solid var(--line);background:var(--surface2);
+  }
+  .entry-row{
+    border-bottom:1px solid var(--line);cursor:pointer;transition:background .12s ease;
+    font-size:13.5px;
+  }
+  .entry-row:last-child{border-bottom:none;}
+  .entry-row:hover{background:var(--surface2);}
+  .cell-url{font-family:'IBM Plex Mono',monospace;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .cell-sub{color:var(--mute);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .cell-cost{font-family:'IBM Plex Mono',monospace;text-align:right;}
+  .chev{color:var(--mute-dim);text-align:center;transition:transform .15s ease;font-size:12px;}
+  .entry-row.open .chev{transform:rotate(90deg);}
+
+  .pill{
+    display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;
+    padding:4px 9px;border-radius:20px;font-family:'IBM Plex Mono',monospace;
+    white-space:nowrap;width:fit-content;
+  }
+  .pill::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor;}
+  .pill.live{color:var(--live);background:rgba(95,169,138,.13);}
+  .pill.redirected{color:var(--redirected);background:rgba(108,143,199,.13);}
+  .pill.parked{color:var(--parked);background:rgba(201,161,90,.13);}
+  .pill.error{color:var(--error);background:rgba(197,107,94,.13);}
+
+  .renewal-tag{font-family:'IBM Plex Mono',monospace;font-size:12.5px;}
+  .renewal-tag.due{color:var(--parked);font-weight:600;}
+  .renewal-tag.overdue{color:var(--error);font-weight:600;}
+
+  .kc-tag{font-size:11.5px;font-weight:600;font-family:'IBM Plex Mono',monospace;}
+  .kc-tag.keep{color:var(--keep);}
+  .kc-tag.cancel{color:var(--cancel);text-decoration:line-through;text-decoration-color:rgba(197,107,94,.5);}
+
+  .detail{
+    padding:0 16px;background:var(--surface2);border-bottom:1px solid var(--line);
+    max-height:0;overflow:hidden;transition:max-height .2s ease, padding .2s ease;
+  }
+  .detail.open{padding:16px;max-height:400px;}
+  .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:12px;}
+  .detail-field{font-size:12.5px;}
+  .detail-field .k{color:var(--mute);text-transform:uppercase;letter-spacing:.03em;font-size:10.5px;margin-bottom:3px;}
+  .detail-field .v{font-family:'IBM Plex Mono',monospace;}
+  .detail-notes{font-size:13px;color:var(--mute);margin-bottom:14px;line-height:1.55;}
+  .detail-actions{display:flex;gap:8px;}
+  .detail-actions button{
+    font-family:'Space Grotesk',sans-serif;font-size:12.5px;font-weight:600;
+    padding:7px 13px;border-radius:6px;cursor:pointer;border:1px solid var(--line);
+    background:var(--surface3);color:var(--paper);
+  }
+  .detail-actions button:hover{border-color:var(--mute-dim);}
+  .detail-actions button.danger{color:var(--error);}
+  .detail-actions button.danger:hover{border-color:var(--error);}
+
+  .empty{padding:60px 20px;text-align:center;color:var(--mute);}
+  .empty .big{font-size:15px;color:var(--paper);margin-bottom:6px;}
+
+  /* ---------- Modal ---------- */
+  .overlay{
+    position:fixed;inset:0;background:rgba(10,11,13,.6);backdrop-filter:blur(2px);
+    display:none;align-items:flex-start;justify-content:center;padding:6vh 16px;z-index:50;overflow-y:auto;
+  }
+  .overlay.show{display:flex;}
+  .modal{
+    background:var(--surface);border:1px solid var(--line);border-radius:12px;
+    width:100%;max-width:520px;padding:24px;
+  }
+  .modal h2{margin:0 0 18px;font-size:18px;}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:12px;color:var(--mute);margin-bottom:6px;}
+  .field input, .field select, .field textarea{width:100%;}
+  .field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  textarea{resize:vertical;min-height:60px;font-family:'Space Grotesk',sans-serif;}
+  .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px;}
+  .modal-actions button{
+    padding:10px 16px;border-radius:7px;font-family:'Space Grotesk',sans-serif;
+    font-weight:600;font-size:13.5px;cursor:pointer;border:1px solid var(--line);
+  }
+  .modal-actions .cancel-btn{background:transparent;color:var(--mute);}
+  .modal-actions .save-btn{background:var(--live);color:#0F1613;border:none;}
+  .hint{font-size:11.5px;color:var(--mute-dim);margin-top:5px;line-height:1.4;}
+
+  .toast{
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--surface3);border:1px solid var(--line);color:var(--paper);
+    padding:11px 18px;border-radius:8px;font-size:13px;opacity:0;
+    transition:all .25s ease;pointer-events:none;z-index:60;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  @media (max-width:820px){
+    .row-head{display:none;}
+    .entry-row{
+      grid-template-columns:1fr auto;grid-template-areas:
+        "url chev" "meta meta" "bottom bottom";
+      row-gap:6px;
+    }
+    .cell-url{grid-area:url;}
+    .chev{grid-area:chev;}
+    .cell-sub{grid-area:meta;}
+    .cell-cost, .row-status, .row-renewal, .row-kc{display:none;}
+    .detail-grid{grid-template-columns:1fr;}
+  }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <h1>URL Registry <span>/ team-owned domains</span></h1>
+    <button class="add-btn" onclick="openModal()">+ Add URL</button>
+  </header>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="controls">
+    <input type="text" class="search" id="search" placeholder="Search URL, program or account…" oninput="render()">
+    <select id="filterStatus" onchange="render()">
+      <option value="">All statuses</option>
+      <option value="live">Live</option>
+      <option value="redirected">Redirected</option>
+      <option value="parked">Parked</option>
+      <option value="error">Error</option>
+    </select>
+    <select id="filterKC" onchange="render()">
+      <option value="">Keep &amp; cancel</option>
+      <option value="keep">Keep</option>
+      <option value="cancel">Cancel</option>
+    </select>
+    <div class="ctrl-right">
+      <button class="ghost-btn" onclick="exportICS()">Export renewal reminders (.ics)</button>
+      <button class="ghost-btn" onclick="exportCSV()">Export CSV</button>
+    </div>
+  </div>
+
+  <div class="registry" id="registry"></div>
+</div>
+
+<!-- Entry modal -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h2 id="modalTitle">Add URL</h2>
+    <input type="hidden" id="entryId">
+    <div class="field">
+      <label>URL</label>
+      <input type="text" id="f_url" placeholder="example.com">
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Program</label>
+        <input type="text" id="f_program" placeholder="e.g. Growth Marketing">
+      </div>
+      <div class="field">
+        <label>Account / client</label>
+        <input type="text" id="f_account" placeholder="e.g. Acme Corp">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Status</label>
+        <select id="f_status">
+          <option value="live">Live</option>
+          <option value="redirected">Redirected</option>
+          <option value="parked">Parked</option>
+          <option value="error">Error</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Keep or cancel</label>
+        <select id="f_kc">
+          <option value="keep">Keep</option>
+          <option value="cancel">Cancel</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Annual cost (USD)</label>
+        <input type="number" id="f_cost" placeholder="0" step="0.01" min="0">
+      </div>
+      <div class="field">
+        <label>Renewal date</label>
+        <input type="date" id="f_renewal">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Reminder email</label>
+        <input type="email" id="f_email" placeholder="ops@company.com">
+      </div>
+      <div class="field">
+        <label>Remind (days before)</label>
+        <input type="number" id="f_days" placeholder="30" min="0">
+      </div>
+    </div>
+    <div class="field">
+      <label>Notes</label>
+      <textarea id="f_notes" placeholder="Context for this URL…"></textarea>
+    </div>
+    <div class="hint">This data is stored in your team's shared database. Reminders aren't sent by this app on their own — export the .ics file above and import it into your calendar, which will handle the alert (or email, if your calendar's reminder settings support it).</div>
+    <div class="modal-actions">
+      <button class="cancel-btn" onclick="closeModal()">Cancel</button>
+      <button class="save-btn" onclick="saveEntry()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+// ---- Supabase config ----
+// Replace these two values with your project's Project URL and anon
+// public key, both found in Supabase: Project Settings → API.
+const SUPABASE_URL = 'https://llcealwsokshscnwdjmx.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable__PKhqIyXsjtzc38bDXFiaQ_U6Vlnbx1';
+
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const TABLE = 'url_registry';
+
+let entries = [];
+let openRowId = null;
+
+const STATUS_LABEL = { live:'Live', redirected:'Redirected', parked:'Parked', error:'Error' };
+
+// Map a DB row (snake_case) to the app's internal shape (camelCase)
+function fromRow(r){
+  return {
+    id: r.id,
+    url: r.url,
+    program: r.program,
+    account: r.account,
+    status: r.status,
+    keepCancel: r.keep_cancel,
+    cost: r.cost,
+    renewal: r.renewal,
+    reminderEmail: r.reminder_email,
+    reminderDays: r.reminder_days,
+    notes: r.notes,
+  };
+}
+// Map the app's internal shape back to DB columns
+function toRow(e){
+  return {
+    id: e.id,
+    url: e.url,
+    program: e.program,
+    account: e.account,
+    status: e.status,
+    keep_cancel: e.keepCancel,
+    cost: e.cost,
+    renewal: e.renewal || null,
+    reminder_email: e.reminderEmail,
+    reminder_days: e.reminderDays,
+    notes: e.notes,
+  };
+}
+
+async function loadEntries(){
+  const { data, error } = await sb.from(TABLE).select('*');
+  if(error){
+    showToast('Could not load registry — check your Supabase config');
+    entries = [];
+  } else {
+    entries = data.map(fromRow);
+  }
+  render();
+}
+
+// Keep every open tab in sync when anyone adds, edits or deletes a row
+function subscribeToChanges(){
+  sb
+    .channel('url_registry_changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: TABLE }, () => {
+      loadEntries();
+    })
+    .subscribe();
+}
+
+function uid(){ return 'u_' + Date.now() + '_' + Math.random().toString(36).slice(2,8); }
+
+function daysUntil(dateStr){
+  if(!dateStr) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const target = new Date(dateStr + 'T00:00:00');
+  return Math.round((target - today) / 86400000);
+}
+
+function money(n){
+  n = Number(n) || 0;
+  return '$' + n.toLocaleString('en-US', {minimumFractionDigits:0, maximumFractionDigits:0});
+}
+
+function renderStats(){
+  const total = entries.length;
+  const totalCost = entries.reduce((s,e)=> s + (Number(e.cost)||0), 0);
+  const liveCount = entries.filter(e=>e.status==='live').length;
+  const dueSoon = entries.filter(e=>{
+    const d = daysUntil(e.renewal);
+    return e.keepCancel==='keep' && d!==null && d <= (Number(e.reminderDays)||30);
+  }).length;
+
+  document.getElementById('stats').innerHTML = `
+    <div class="stat"><div class="num">${total}</div><div class="lbl">URLs tracked</div></div>
+    <div class="stat"><div class="num">${liveCount}</div><div class="lbl">Currently live</div></div>
+    <div class="stat"><div class="num mono">${money(totalCost)}</div><div class="lbl">Total annual cost</div></div>
+    <div class="stat ${dueSoon>0?'warn':''}"><div class="num">${dueSoon}</div><div class="lbl">Renewals due soon</div></div>
+  `;
+}
+
+function matchesFilters(e){
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  const st = document.getElementById('filterStatus').value;
+  const kc = document.getElementById('filterKC').value;
+  if(st && e.status !== st) return false;
+  if(kc && e.keepCancel !== kc) return false;
+  if(q){
+    const hay = (e.url + ' ' + e.program + ' ' + e.account).toLowerCase();
+    if(!hay.includes(q)) return false;
+  }
+  return true;
+}
+
+function render(){
+  renderStats();
+  const list = entries
+    .filter(matchesFilters)
+    .slice()
+    .sort((a,b) => {
+      const da = a.renewal ? new Date(a.renewal) : new Date('2999-01-01');
+      const db = b.renewal ? new Date(b.renewal) : new Date('2999-01-01');
+      return da - db;
+    });
+
+  const container = document.getElementById('registry');
+
+  if(entries.length === 0){
+    container.innerHTML = `<div class="empty"><div class="big">No URLs tracked yet</div>Add the first one your team owns to start the registry.</div>`;
+    return;
+  }
+  if(list.length === 0){
+    container.innerHTML = `<div class="empty"><div class="big">No matches</div>Try a different search or filter.</div>`;
+    return;
+  }
+
+  let html = `
+    <div class="row-head">
+      <div>URL</div><div>Program</div><div>Account</div><div>Status</div><div>Renewal</div><div style="text-align:right">Annual</div><div></div>
+    </div>`;
+
+  list.forEach(e=>{
+    const d = daysUntil(e.renewal);
+    const remindAt = Number(e.reminderDays) || 30;
+    let renewalClass = '';
+    let renewalText = e.renewal || '—';
+    if(d !== null){
+      if(d < 0){ renewalClass = 'overdue'; renewalText = `${e.renewal} (overdue)`; }
+      else if(d <= remindAt){ renewalClass = 'due'; renewalText = `${e.renewal} (${d}d)`; }
+    }
+    const isOpen = openRowId === e.id;
+    html += `
+      <div class="entry-row ${isOpen?'open':''}" onclick="toggleRow('${e.id}')">
+        <div>
+          <div class="cell-url">${escapeHtml(e.url)}</div>
+          <div class="cell-sub">${escapeHtml(e.program||'—')} · ${escapeHtml(e.account||'—')}</div>
+        </div>
+        <div>${escapeHtml(e.program||'—')}</div>
+        <div>${escapeHtml(e.account||'—')}</div>
+        <div class="row-status"><span class="pill ${e.status}">${STATUS_LABEL[e.status]}</span></div>
+        <div class="row-renewal"><span class="renewal-tag ${renewalClass}">${renewalText}</span></div>
+        <div class="cell-cost row-status">${money(e.cost)}</div>
+        <div class="chev">▸</div>
+      </div>
+      <div class="detail ${isOpen?'open':''}">
+        ${renderDetail(e)}
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+}
+
+function renderDetail(e){
+  const d = daysUntil(e.renewal);
+  return `
+    <div class="detail-grid">
+      <div class="detail-field"><div class="k">Status</div><div class="v"><span class="pill ${e.status}">${STATUS_LABEL[e.status]}</span></div></div>
+      <div class="detail-field"><div class="k">Keep / cancel</div><div class="v"><span class="kc-tag ${e.keepCancel}">${e.keepCancel==='keep'?'Keep':'Cancel'}</span></div></div>
+      <div class="detail-field"><div class="k">Annual cost</div><div class="v">${money(e.cost)}</div></div>
+      <div class="detail-field"><div class="k">Renewal date</div><div class="v">${e.renewal || '—'}${d!==null? ' · '+(d<0?'overdue by '+Math.abs(d)+'d':d+'d away'):''}</div></div>
+      <div class="detail-field"><div class="k">Reminder email</div><div class="v">${escapeHtml(e.reminderEmail||'—')}</div></div>
+      <div class="detail-field"><div class="k">Remind (days before)</div><div class="v">${e.reminderDays||30}</div></div>
+    </div>
+    <div class="detail-notes">${e.notes ? escapeHtml(e.notes) : 'No notes.'}</div>
+    <div class="detail-actions" onclick="event.stopPropagation()">
+      <button onclick="openModal('${e.id}')">Edit</button>
+      <button class="danger" onclick="deleteEntry('${e.id}')">Delete</button>
+    </div>
+  `;
+}
+
+function toggleRow(id){
+  openRowId = (openRowId === id) ? null : id;
+  render();
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+/* ---------- Modal ---------- */
+function openModal(id){
+  document.getElementById('entryId').value = id || '';
+  if(id){
+    const e = entries.find(x=>x.id===id);
+    document.getElementById('modalTitle').textContent = 'Edit URL';
+    document.getElementById('f_url').value = e.url || '';
+    document.getElementById('f_program').value = e.program || '';
+    document.getElementById('f_account').value = e.account || '';
+    document.getElementById('f_status').value = e.status || 'live';
+    document.getElementById('f_kc').value = e.keepCancel || 'keep';
+    document.getElementById('f_cost').value = e.cost || '';
+    document.getElementById('f_renewal').value = e.renewal || '';
+    document.getElementById('f_email').value = e.reminderEmail || '';
+    document.getElementById('f_days').value = e.reminderDays || 30;
+    document.getElementById('f_notes').value = e.notes || '';
+  } else {
+    document.getElementById('modalTitle').textContent = 'Add URL';
+    ['f_url','f_program','f_account','f_cost','f_renewal','f_email','f_notes'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('f_status').value = 'live';
+    document.getElementById('f_kc').value = 'keep';
+    document.getElementById('f_days').value = 30;
+  }
+  document.getElementById('overlay').classList.add('show');
+}
+function closeModal(){
+  document.getElementById('overlay').classList.remove('show');
+}
+document.getElementById('overlay').addEventListener('click', (ev)=>{
+  if(ev.target.id === 'overlay') closeModal();
+});
+
+async function saveEntry(){
+  const url = document.getElementById('f_url').value.trim();
+  if(!url){ showToast('URL is required'); return; }
+  const id = document.getElementById('entryId').value;
+  const data = {
+    id: id || uid(),
+    url,
+    program: document.getElementById('f_program').value.trim(),
+    account: document.getElementById('f_account').value.trim(),
+    status: document.getElementById('f_status').value,
+    keepCancel: document.getElementById('f_kc').value,
+    cost: parseFloat(document.getElementById('f_cost').value) || 0,
+    renewal: document.getElementById('f_renewal').value,
+    reminderEmail: document.getElementById('f_email').value.trim(),
+    reminderDays: parseInt(document.getElementById('f_days').value) || 30,
+    notes: document.getElementById('f_notes').value.trim(),
+  };
+  const { error } = id
+    ? await sb.from(TABLE).update(toRow(data)).eq('id', id)
+    : await sb.from(TABLE).insert(toRow(data));
+
+  if(error){
+    showToast('Could not save — check your Supabase config');
+    return;
+  }
+  closeModal();
+  await loadEntries();
+  showToast(id ? 'URL updated' : 'URL added');
+}
+
+async function deleteEntry(id){
+  if(!confirm('Delete this URL from the registry?')) return;
+  const { error } = await sb.from(TABLE).delete().eq('id', id);
+  if(error){
+    showToast('Could not delete — check your Supabase config');
+    return;
+  }
+  openRowId = null;
+  await loadEntries();
+  showToast('URL deleted');
+}
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+/* ---------- Export ---------- */
+function exportCSV(){
+  const headers = ['URL','Program','Account','Status','Keep/Cancel','Annual Cost','Renewal Date','Reminder Email','Reminder Days Before','Notes'];
+  const rows = entries.map(e => [
+    e.url, e.program, e.account, STATUS_LABEL[e.status], e.keepCancel, e.cost, e.renewal, e.reminderEmail, e.reminderDays, (e.notes||'').replace(/\n/g,' ')
+  ]);
+  const csv = [headers, ...rows].map(r => r.map(v => `"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  downloadFile(csv, 'url-registry.csv', 'text/csv');
+  showToast('CSV exported');
+}
+
+function exportICS(){
+  const keepers = entries.filter(e => e.keepCancel === 'keep' && e.renewal);
+  if(keepers.length === 0){ showToast('No renewal dates to export'); return; }
+  let ics = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//URL Registry//EN\r\n';
+  keepers.forEach(e=>{
+    const dt = e.renewal.replace(/-/g,'');
+    const daysBefore = Number(e.reminderDays) || 30;
+    const summary = `Renewal due: ${e.url}`;
+    const desc = [
+      `Program: ${e.program||'—'}`,
+      `Account: ${e.account||'—'}`,
+      `Annual cost: ${money(e.cost)}`,
+      e.reminderEmail ? `Reminder contact: ${e.reminderEmail}` : '',
+      e.notes ? `Notes: ${e.notes}` : ''
+    ].filter(Boolean).join('\\n');
+    ics += 'BEGIN:VEVENT\r\n';
+    ics += `UID:${e.id}@url-registry\r\n`;
+    ics += `DTSTAMP:${new Date().toISOString().replace(/[-:]/g,'').split('.')[0]}Z\r\n`;
+    ics += `DTSTART;VALUE=DATE:${dt}\r\n`;
+    ics += `SUMMARY:${escapeICS(summary)}\r\n`;
+    ics += `DESCRIPTION:${escapeICS(desc)}\r\n`;
+    ics += 'RRULE:FREQ=YEARLY\r\n';
+    ics += 'BEGIN:VALARM\r\n';
+    ics += `TRIGGER:-P${daysBefore}D\r\n`;
+    ics += 'ACTION:DISPLAY\r\n';
+    ics += `DESCRIPTION:${escapeICS(summary)}\r\n`;
+    ics += 'END:VALARM\r\n';
+    ics += 'END:VEVENT\r\n';
+  });
+  ics += 'END:VCALENDAR\r\n';
+  downloadFile(ics, 'url-registry-renewals.ics', 'text/calendar');
+  showToast('.ics exported — import into your calendar');
+}
+
+function escapeICS(s){
+  return String(s).replace(/[\\;,]/g, m => '\\'+m).replace(/\n/g,'\\n');
+}
+
+function downloadFile(content, filename, mime){
+  const blob = new Blob([content], {type: mime});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+loadEntries();
+subscribeToChanges();
+
+// Expose only what's called from inline HTML event handlers
+window.openModal = openModal;
+window.closeModal = closeModal;
+window.saveEntry = saveEntry;
+window.deleteEntry = deleteEntry;
+window.toggleRow = toggleRow;
+window.exportCSV = exportCSV;
+window.exportICS = exportICS;
+window.render = render;
+})();
+</script>
+</body>
+</html>
