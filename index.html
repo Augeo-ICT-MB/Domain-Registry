@@ -202,10 +202,33 @@
 </head>
 <body>
 
-<div class="wrap">
+<div class="overlay show" id="authOverlay" style="align-items:center;">
+  <div class="modal" style="max-width:380px;">
+    <h2>Sign in</h2>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="auth_email" placeholder="you@company.com" autocomplete="username">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="auth_password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter') handleSignIn()">
+    </div>
+    <div id="authError" style="color:var(--error);font-size:12.5px;min-height:16px;margin-bottom:4px;"></div>
+    <div class="modal-actions" style="justify-content:stretch;">
+      <button class="save-btn" style="width:100%;" onclick="handleSignIn()">Sign in</button>
+    </div>
+    <div class="hint">Accounts are created by a team admin in Supabase — there's no self-signup. Contact whoever manages this tool if you need access.</div>
+  </div>
+</div>
+
+<div class="wrap" id="appContent" style="display:none;">
   <header class="top">
-    <h1>Domain Registry <span>/ team-owned domains</span></h1>
-    <button class="add-btn" onclick="openModal()">+ Add URL</button>
+    <h1>URL Registry <span>/ team-owned domains</span></h1>
+    <div style="display:flex;gap:10px;align-items:center;">
+      <span id="userEmail" class="cell-sub"></span>
+      <button class="ghost-btn" onclick="handleSignOut()">Sign out</button>
+      <button class="add-btn" onclick="openModal()">+ Add URL</button>
+    </div>
   </header>
 
   <div class="stats" id="stats"></div>
@@ -366,7 +389,7 @@ async function loadEntries(){
 
 // Keep every open tab in sync when anyone adds, edits or deletes a row
 function subscribeToChanges(){
-  sb
+  realtimeChannel = sb
     .channel('url_registry_changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: TABLE }, () => {
       loadEntries();
@@ -644,8 +667,57 @@ function downloadFile(content, filename, mime){
   URL.revokeObjectURL(url);
 }
 
-loadEntries();
-subscribeToChanges();
+let realtimeChannel = null;
+
+async function initApp(){
+  const { data: { session } } = await sb.auth.getSession();
+  if(session){
+    showApp(session);
+  } else {
+    showLogin();
+  }
+
+  sb.auth.onAuthStateChange((event, session) => {
+    if(event === 'SIGNED_IN' && session){
+      showApp(session);
+    } else if(event === 'SIGNED_OUT'){
+      showLogin();
+    }
+  });
+}
+
+function showLogin(){
+  document.getElementById('authOverlay').classList.add('show');
+  document.getElementById('appContent').style.display = 'none';
+  if(realtimeChannel){ sb.removeChannel(realtimeChannel); realtimeChannel = null; }
+}
+
+function showApp(session){
+  document.getElementById('authOverlay').classList.remove('show');
+  document.getElementById('appContent').style.display = 'block';
+  document.getElementById('userEmail').textContent = session.user.email || '';
+  loadEntries();
+  if(!realtimeChannel) subscribeToChanges();
+}
+
+async function handleSignIn(){
+  const email = document.getElementById('auth_email').value.trim();
+  const password = document.getElementById('auth_password').value;
+  const errEl = document.getElementById('authError');
+  errEl.textContent = '';
+  if(!email || !password){ errEl.textContent = 'Enter both email and password.'; return; }
+
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if(error){
+    errEl.textContent = error.message || 'Sign in failed — check your credentials.';
+  }
+}
+
+async function handleSignOut(){
+  await sb.auth.signOut();
+}
+
+initApp();
 
 // Expose only what's called from inline HTML event handlers
 window.openModal = openModal;
@@ -656,6 +728,8 @@ window.toggleRow = toggleRow;
 window.exportCSV = exportCSV;
 window.exportICS = exportICS;
 window.render = render;
+window.handleSignIn = handleSignIn;
+window.handleSignOut = handleSignOut;
 })();
 </script>
 </body>
